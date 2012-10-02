@@ -27,22 +27,5 @@ def load_test(test_yaml):
         else:
             Desk(**values).save()
 
-@manager.command
-def run_fapws3(port):
-    import fapws._evwsgi as evwsgi
-    from fapws import base
-    from fapws.contrib import views, log
-
-    from recorder import app
-    
-    evwsgi.start('0.0.0.0', port) 
-    evwsgi.set_base_module(base)
-    
-    staticfile = views.Staticfile('static', maxage=2629000)
-    evwsgi.wsgi_cb(('/static', staticfile))
-    evwsgi.wsgi_cb(('/', app))
-    evwsgi.set_debug(0)
-    evwsgi.run()
-
 if __name__ == "__main__":
     manager.run()

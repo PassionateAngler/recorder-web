@@ -12,3 +12,5 @@ RECORDING_TIMESTAMPS_KEY = "recording:timestamps"
 RECORDS_PER_PAGE = 7 
 
 APP_TZ = "Europe/Warsaw"
+
+RECORDER_LOG_DIR = "/home/pawel/praca/Krzysiek_D/Recorder/flask/recorder/log"

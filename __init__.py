@@ -13,6 +13,15 @@ from recorder.decorators import templated
 
 # Initialize simple Flask application
 app = Flask(__name__)
+
+if not app.debug:
+    import logging
+    from logging.handlers import RotatingFileHandler 
+    logfile = path.join(settings.RECORDER_LOG_DIR, 'recorder.log') 
+    file_handler = RotatingFileHandler(logfile)
+    file_handler.setLevel(logging.ERROR)
+    app.logger.addHandler(file_handler)
+
 app.config.from_object(settings)
 app.secret_key = '\xc3G\x1e\x16\xca\xed\x02\x01T\xc9\xe9?t\xc6\xa7\x1f\xf5\x17\x04\x94\xc0`\xad\xfa'
 

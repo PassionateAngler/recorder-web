@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import json
 from time import time
 from datetime import datetime 
@@ -65,6 +66,10 @@ class Card(RedisBase, CardId):
         super(Card, self).delete()
         redis.srem(self.INDEX_KEY, self.card_id)
 
+    def all_desks(self):
+        return map(lambda channel: Desk.load(self.card_id, channel), 
+                   xrange(self.num_of_channels))
+
     @staticmethod
     def load(card_id):
         n = redis.hgetall(Card.KEY_STRING % card_id)
@@ -85,12 +90,11 @@ class Card(RedisBase, CardId):
 
     @property
     def num_of_channels(self):
-        return self._num_of_channels 
+        return int(self._num_of_channels)
 
     @property
     def key(self):
         return self.KEY_STRING % (self.card_id) 
-
 
 class Desk(RedisBase, CardId, ChannelId):
     KEY_STRING = "desk:%s:%s"
@@ -142,37 +146,40 @@ class Desk(RedisBase, CardId, ChannelId):
     def key(self):
         return self.KEY_STRING % (self.card_id, self._channel_id) 
 
+    def __str__(self):
+        return u"<Desk card_id: %s, channel: %s>" \
+                    % (self.card_id, self._channel_id)
+
+    def __repr__(self):
+        return self.__str__()
 
 class Recording(RedisBase, CardId, ChannelId):
-    KEY_STRING = "recording:%s"
-    INDEX_KEY = "recordings:%s:%s"
-    TIMESTAMPS_KEY = "recordings:timestamps"
+    KEY_STRING = settings.RECORDING_KEY_STRING
+    INDEX_KEY = settings.RECORDING_INDEX_KEY
+    TIMESTAMPS_KEY = settings.RECORDING_TIMESTAMPS_KEY
 
-    def __init__(self, card_id, channel_id,
-                 path, timestamp, duration,
-                 display, desk):
-        super(Card, self).__init__()
+    def __init__(self, **kwargs):
         self._is_new = True
         self._rid = None
 
         #path relative to settings.RECORDINGS_DIR 
-        self._path = path
+        self._path = kwargs.get('path')
         #timestamp (in seconds GMT)  
-        self._timestamp = timestamp 
+        self._timestamp = int(kwargs.get('timestamp'))
         #duratrion of recording
-        self._duration = duration 
-        self._card_id = card_id
-        self._channel_id = channel_id
+        self._duration = int(kwargs.get('duration'))
+        self._card_id = int(kwargs.get('card_id'))
+        self._channel_id = int(kwargs.get('channel_id'))
         #moved to archive = 1
-        self._status = 0
+        self._status = int(kwargs.get('status'))
         #all information from LCD
-        self._display = display
+        self._display = kwargs.get('display')
         #json description of used desk
-        self._desk = desk
+        self._desk = json.loads(kwargs.get('desk'))
 
     def __str__(self):
-        return "<Recording id:%s, timestamp:%s, duration:%s, path:%>" \
-                    % (self._id, self._timestamp, self._duration, self._path)
+        return u"<Recording id:%s, timestamp:%s, duration:%s, path:%s>" \
+                    % (self._rid, self._timestamp, self._duration, self._path)
 
     def __repr__(self):
         return self.__str__()
@@ -211,18 +218,73 @@ class Recording(RedisBase, CardId, ChannelId):
 
     @staticmethod
     def load(rid):
-        recording = redis.hget(Recording.KEY_STRING % rid)
-        if n != None: 
-            c = Recording(card_id, int(n) )
-            return c
+        r_db = redis.hgetall(Recording.KEY_STRING % rid)
+        if r_db != None: 
+            rec = Recording(**r_db)
+            rec._is_new = False 
+            rec._rid = rid 
+            return rec
         else:
             return None
 
+    @staticmethod
+    def last():
+        return Recording.load(redis.get("global:nextRecordingId"));
+
     #TODO dopisać funkcje obsługujące wyszukiwanie po timestampach
+    #     dodać do poniższej funkcji obsługę sesji
+    @staticmethod
+    def search(start, end, sort_len = False, load = False, page = 0):
+        recordings = redis.zrangebyscore(Recording.TIMESTAMPS_KEY, start, end)
+        lenght = len(recordings)
+        tmp_key = "recording:tmp:search:%s:%s" % (int(start), int(end))
+        start_limit = settings.RECORDS_PER_PAGE * (page - 1)
+
+        if(sort_len):
+            if not redis.exists(tmp_key):
+                from time import time
+                from random import randint
+                pipe = redis.pipeline()
+                map(lambda r: pipe.sadd(tmp_key, r), recordings)
+                pipe.execute()
+            else:
+                #Reset expire time
+                redis.persist(tmp_key)
+            #Set expiration time
+            redis.expire(tmp_key, 60);
+            if(page > 0):
+                #Return One page of records
+                recordings = redis.sort(tmp_key, 
+                                        start_limit,
+                                        settings.RECORDS_PER_PAGE, 
+                                        "recording:*->duration",
+                                        None,
+                                        True) 
+            else:
+                #Return all records
+                recordings = redis.sort(tmp_key, 
+                                        None, 
+                                        None, 
+                                        "recording:*->duration",
+                                        None,
+                                        True) 
+        else:
+            if(page > 0):
+                recordings = recordings[start_limit :
+                                        settings.RECORDS_PER_PAGE]
+
+        if(load):
+            return (map(lambda r_id: Recording.load(r_id), recordings), lenght)
+        else:
+            return (recordings, lenght)
+
+    @staticmethod
+    def count_all():
+        return redis.zcard(Recording.TIMESTAMPS_KEY)
+
     @staticmethod
     def all(load = True):
         if load:
             return map(lambda rid: Recording.load(rid), Recording.all(False))
         else:
-            return redis.zrange(Recording.INDEX_KEY, 0, 2**32-1)
-
+            return redis.zrangebyscore(Recording.TIMESTAMPS_KEY, 0, 2**32-1)

@@ -1,0 +1,10 @@
+<ul class="tabs" id="table-pagination">
+{% for n in pages %}
+    {% if n == page %}
+        <li class="active"><a href="#header">{{n}}</a></li>
+    {% else %}
+        <li><a href="#header">{{n}}</a></li>
+    {% endif %}
+{% endfor %}
+</ul>
+

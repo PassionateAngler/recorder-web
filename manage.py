@@ -14,14 +14,18 @@ def init():
     else:
         print "App initialized."
     
-def load_desks(desks):
+@manager.command
+def load_test(test_yaml):
     import yaml
     from pprint import pprint
-    with open(desks) as f:
-        desks_map = yaml.load(f)
-    for desk in desks_map.values():
-        print desk.get('name')
-        print desk.get('desc')
+    from recorder.models import Card, Desk
+    with open(test_yaml) as f:
+        tests_map = yaml.load(f)
+    for key, values in tests_map.iteritems():
+        if key == 'card0':
+            Card(**values).save() 
+        else:
+            Desk(**values).save()
 
 if __name__ == "__main__":
     manager.run()

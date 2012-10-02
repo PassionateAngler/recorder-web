@@ -1,0 +1,68 @@
+{% extends "layout.html" %}
+{% block main %}
+
+<article class="module width_full">
+<header><h3>Podaj datę </h3></header>
+<div class="module_content">
+    <form class="quick_search">
+    <input id="date-simple" type="text" value="Quick Search" onfocus="if(!this._haschanged){this.value=''};this._haschanged=true;">
+    <br />
+    <span>szukaj nagrań zaczynających się po podanej dacie i godzinie</span>
+    </form>
+</div>
+<div class="module_content" id="results">
+
+</div>
+</article>
+<article class="module width_full" id="search_results">
+<header id="search_results_header">
+{% autoescape false %}
+<h3 class="tabs_involved">Wyniki <span id="records-num">Znaleziono: ({{num}})</span></h3>
+{{ pagination }}
+</header>
+{{ recordings_table }}
+{% endautoescape %}
+</article>
+
+<script type="text/javascript">
+    jQuery(function($){
+         var parse_data = function(data){
+            if(data.error){
+                $("#results").text(data.error); 
+            }else{
+                $("#result_table").remove();
+                $("#table-pagination").remove();
+                $("#search_results").append(data.recordings_table);
+                $("#search_results_header").append(data.pagination);
+                $("#records-num").text("Znaleziono: (" +
+                    data.num + ")");
+      	        $(".tablesorter").tablesorter(); 
+                $('.column').equalHeight();
+                enable_pagination();
+            }
+         }
+         var enable_pagination = function(){
+            $('#table-pagination li').not('.active').click(function(){
+                $.getJSON($SCRIPT_ROOT + '/_search_simple', 
+                          {p:$(this).text()},
+                          parse_data                 
+                );
+             });
+         }
+         enable_pagination();
+         $('#date-simple').datetimepicker({
+            onSelect: function(selectedDateTime){
+                $.getJSON($SCRIPT_ROOT + '/_search_simple', 
+                          {s:selectedDateTime},
+                          parse_data                 
+                );
+            },
+            hour: {{ default_date.hour }},
+            minute: {{ default_date.minute }},
+            defaultDate: "{{ default_date_str }}"
+         });
+    });
+</script>
+
+
+{% endblock %}

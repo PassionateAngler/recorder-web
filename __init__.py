@@ -45,9 +45,13 @@ def app_init():
 
 def _perform_search(start, page):
     from recorder.models import Recording
+    import calendar
+    utc = pytz.timezone("UTC")
     start = datetime.strptime(start, "%d.%m.%Y %H:%M")
     start = pytz.timezone(settings.APP_TZ).localize(start)
-    start = time.mktime(start.utctimetuple()) 
+    start = utc.normalize(start.astimezone(utc))
+
+    start = calendar.timegm(start.utctimetuple()) 
     recordings, num = Recording.search(
                             start, 
                             start+(3600*3), 
@@ -68,7 +72,6 @@ def home():
 
 @app.route('/_search_simple', methods=['GET'])
 def _search_simple():
-    import jsonpickle
     ret = dict()
     page = request.args.get('p', 1, type=int)
     try:
@@ -100,7 +103,8 @@ def _search_simple():
 @templated()
 def search():
     from recorder.models import Recording
-    date = datetime.fromtimestamp(Recording.last().timestamp)
+    last = Recording.last()
+    date = datetime.utcfromtimestamp(last.timestamp)
     date = pytz.timezone("UTC").localize(date)
     date = date.astimezone(pytz.timezone(settings.APP_TZ))
 

@@ -216,6 +216,14 @@ class Recording(RedisBase, CardId, ChannelId):
     def desk(self):
         return self._desk
 
+    def hr_timestamp(self):
+        import pytz
+        utc = pytz.timezone("UTC")
+        app_tz = pytz.timezone(settings.APP_TZ)
+        date = utc.localize(datetime.utcfromtimestamp(self.timestamp))
+        date = date.astimezone(app_tz) 
+        return date.strftime("%d-%m-%Y %H:%M")
+
     @staticmethod
     def load(rid):
         r_db = redis.hgetall(Recording.KEY_STRING % rid)

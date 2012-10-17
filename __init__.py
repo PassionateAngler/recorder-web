@@ -8,21 +8,22 @@ from flask import Flask, redirect, url_for, render_template, jsonify, request, \
 from flask.ext.redis import Redis
 
 #from testapp import settings
-from recorder import settings
+#from recorder import settings
 from recorder.decorators import templated
 
 # Initialize simple Flask application
 app = Flask(__name__)
+app.config.from_pyfile('recorder.cfg')
 
 if not app.debug:
     import logging
     from logging.handlers import RotatingFileHandler 
-    logfile = path.join(settings.RECORDER_LOG_DIR, 'recorder.log') 
+    logfile = path.join(app.config['RECORDER_LOG_DIR'], 'recorder.log') 
     file_handler = RotatingFileHandler(logfile)
     file_handler.setLevel(logging.ERROR)
     app.logger.addHandler(file_handler)
 
-app.config.from_object(settings)
+#app.config.from_object(config.)
 app.secret_key = '\xc3G\x1e\x16\xca\xed\x02\x01T\xc9\xe9?t\xc6\xa7\x1f\xf5\x17\x04\x94\xc0`\xad\xfa'
 
 # Setup Redis conection
@@ -48,7 +49,7 @@ def _perform_search(start, page):
     import calendar
     utc = pytz.timezone("UTC")
     start = datetime.strptime(start, "%d.%m.%Y %H:%M")
-    start = pytz.timezone(settings.APP_TZ).localize(start)
+    start = pytz.timezone(app.config['APP_TZ']).localize(start)
     start = utc.normalize(start.astimezone(utc))
 
     start = calendar.timegm(start.utctimetuple()) 
@@ -58,7 +59,7 @@ def _perform_search(start, page):
                             True,
                             True,
                             page)
-    num_pages = int(num/settings.RECORDS_PER_PAGE)
+    num_pages = int(num/app.config['RECORDS_PER_PAGE'])
     return (recordings, num, num_pages)
 
 @app.route('/')
@@ -106,7 +107,7 @@ def search():
     last = Recording.last()
     date = datetime.utcfromtimestamp(last.timestamp)
     date = pytz.timezone("UTC").localize(date)
-    date = date.astimezone(pytz.timezone(settings.APP_TZ))
+    date = date.astimezone(pytz.timezone(app.config['APP_TZ']))
 
     recordings_table = "" 
     num = 0

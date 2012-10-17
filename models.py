@@ -4,8 +4,7 @@ from time import time
 from datetime import datetime 
 from pytz import timezone
 
-import settings
-from recorder import redis
+from recorder import app,redis
 
 class RedisBase(object):
     KEY_STRING = ""
@@ -154,15 +153,15 @@ class Desk(RedisBase, CardId, ChannelId):
         return self.__str__()
 
 class Recording(RedisBase, CardId, ChannelId):
-    KEY_STRING = settings.RECORDING_KEY_STRING
-    INDEX_KEY = settings.RECORDING_INDEX_KEY
-    TIMESTAMPS_KEY = settings.RECORDING_TIMESTAMPS_KEY
+    KEY_STRING = app.config['RECORDING_KEY_STRING']
+    INDEX_KEY = app.config['RECORDING_INDEX_KEY']
+    TIMESTAMPS_KEY = app.config['RECORDING_TIMESTAMPS_KEY']
 
     def __init__(self, **kwargs):
         self._is_new = True
         self._rid = None
 
-        #path relative to settings.RECORDINGS_DIR 
+        #path relative to app.config['RECORDINGS_DIR']
         self._path = kwargs.get('path')
         #timestamp (in seconds GMT)  
         self._timestamp = int(kwargs.get('timestamp'))
@@ -219,7 +218,7 @@ class Recording(RedisBase, CardId, ChannelId):
     def hr_timestamp(self):
         import pytz
         utc = pytz.timezone("UTC")
-        app_tz = pytz.timezone(settings.APP_TZ)
+        app_tz = pytz.timezone(app.config['APP_TZ'])
         date = utc.localize(datetime.utcfromtimestamp(self.timestamp))
         date = date.astimezone(app_tz) 
         return date.strftime("%d-%m-%Y %H:%M")
@@ -246,7 +245,7 @@ class Recording(RedisBase, CardId, ChannelId):
         recordings = redis.zrangebyscore(Recording.TIMESTAMPS_KEY, start, end)
         lenght = len(recordings)
         tmp_key = "recording:tmp:search:%s:%s" % (int(start), int(end))
-        start_limit = settings.RECORDS_PER_PAGE * (page - 1)
+        start_limit = app.config['RECORDS_PER_PAGE'] * (page - 1)
 
         if(sort_len):
             if not redis.exists(tmp_key):
@@ -264,7 +263,7 @@ class Recording(RedisBase, CardId, ChannelId):
                 #Return One page of records
                 recordings = redis.sort(tmp_key, 
                                         start_limit,
-                                        settings.RECORDS_PER_PAGE, 
+                                        app.config['RECORDS_PER_PAGE'], 
                                         "recording:*->duration",
                                         None,
                                         True) 
@@ -279,7 +278,7 @@ class Recording(RedisBase, CardId, ChannelId):
         else:
             if(page > 0):
                 recordings = recordings[start_limit :
-                                        settings.RECORDS_PER_PAGE]
+                                        app.config['RECORDS_PER_PAGE']]
 
         if(load):
             return (map(lambda r_id: Recording.load(r_id), recordings), lenght)

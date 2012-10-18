@@ -1,0 +1,2 @@
+recursive-include recorder/templates *
+recursive-include recorder/static *

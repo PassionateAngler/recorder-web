@@ -1,0 +1,9 @@
+*.pyc
+*.vim
+log/
+*.swp
+*.cfg
+dist/
+*.egg-info
+recordings-test/
+runserver-fapws3.py

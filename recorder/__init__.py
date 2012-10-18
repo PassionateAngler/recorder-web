@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import time
 import pytz
-from os import path
+from os import path, environ
 from datetime import datetime
 from flask import Flask, redirect, url_for, render_template, jsonify, request, \
                     session
@@ -13,7 +13,15 @@ from recorder.decorators import templated
 
 # Initialize simple Flask application
 app = Flask(__name__)
-app.config.from_pyfile('recorder.cfg')
+
+if(environ.get('RECORDER_MODE') == 'production'):
+    app.config['DEVEL'] = False
+    app.config['DEBUG'] = False
+    app.config.from_pyfile('recorder.cfg')
+else:
+    app.config['DEVEL'] = True
+    app.config['DEBUG'] = True
+    app.config.from_pyfile('recorder-devel.cfg')
 
 if not app.debug:
     import logging

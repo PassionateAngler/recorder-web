@@ -1,8 +1,9 @@
 *.pyc
 *.vim
 log/
+*.log
 *.swp
-*.cfg
+#*.cfg
 dist/
 *.egg-info
 recordings-test/

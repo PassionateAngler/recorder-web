@@ -13,15 +13,7 @@ from recorder.decorators import templated
 
 # Initialize simple Flask application
 app = Flask(__name__)
-
-if(environ.get('RECORDER_MODE') == 'production'):
-    app.config['DEVEL'] = False
-    app.config['DEBUG'] = False
-    app.config.from_pyfile('recorder.cfg')
-else:
-    app.config['DEVEL'] = True
-    app.config['DEBUG'] = True
-    app.config.from_pyfile('recorder-devel.cfg')
+app.config.from_envvar('RECORDER_CONFIG')
 
 if not app.debug:
     import logging

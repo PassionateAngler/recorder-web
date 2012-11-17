@@ -26,35 +26,12 @@
 
 <script type="text/javascript">
     jQuery(function($){
-         var parse_data = function(data){
-            if(data.error){
-                $("#results").text(data.error); 
-            }else{
-                $("#result_table").remove();
-                $("#table-pagination").remove();
-                $("#search_results").append(data.recordings_table);
-                $("#search_results_header").append(data.pagination);
-                $("#records-num").text("Znaleziono: (" +
-                    data.num + ")");
-      	        $(".tablesorter").tablesorter(); 
-                $('.column').equalHeight();
-                enable_pagination();
-            }
-         }
-         var enable_pagination = function(){
-            $('#table-pagination li').not('.active').click(function(){
-                $.getJSON($SCRIPT_ROOT + '/_search_simple', 
-                          {p:$(this).text()},
-                          parse_data                 
-                );
-             });
-         }
-         enable_pagination();
+         RecorderUi.enable_pagination('/_ajax_search');
          $('#date-simple').datetimepicker({
             onSelect: function(selectedDateTime){
-                $.getJSON($SCRIPT_ROOT + '/_search_simple', 
+                $.getJSON(RecorderUi.SCRIPT_ROOT + '/_ajax_search', 
                           {s:selectedDateTime},
-                          parse_data                 
+                          RecorderUi.parse_data                 
                 );
             },
             hour: {{ default_date.hour }},

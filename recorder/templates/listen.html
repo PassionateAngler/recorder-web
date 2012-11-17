@@ -1,0 +1,41 @@
+{% extends "layout.html" %}
+{% block main %}
+
+<article class="module width_full">
+<header>
+    <h3>Odsłuchaj</h3>
+    </header>
+    <div class="module_content">
+    <audio id="player" src="{{recording.path_url()}}" type="audio/wav" controls="controls"></audio>
+    <div class="clear"></div>
+    </div>
+</article>
+<article class="module width_half">
+    <header>
+    <h3>Szczegóły nagrania</h3>
+    </header>
+    <div class="module_content">
+        <ul>
+            <li><b>Data rozpoczęcia</b>: {{ recording.hr_timestamp() }} </li>
+            <li><b>Czas trwania</b>: {{ recording.duration }}s </li>
+            <li><b>Numer kanału</b>: {{ recording.channel_id }} </li>
+        <ul>
+    </div>
+</article>
+<article class="module width_half">
+    <header>
+    <h3>Stanowisko <span class="subtitle">(w chwili nagrania)</span></h3>
+    </header>
+    <div class="module_content">
+        <p>
+        <h4>{{ recording.desk.name }}</h4>
+        {% autoescape false %}
+        {{ recording.desk.description }}
+        {% endautoescape %}
+        </p>
+    </div>
+<article>
+<script>
+    $('audio').mediaelementplayer({audioWidth:"100%"});
+</script>
+{% endblock %}

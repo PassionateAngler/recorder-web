@@ -4,7 +4,7 @@ import pytz
 from os import path, environ
 from datetime import datetime
 from flask import Flask, redirect, url_for, render_template, jsonify, request, \
-                    session
+                    session, abort
 from flask.ext.redis import Redis
 
 #from testapp import settings
@@ -44,21 +44,32 @@ def app_init():
     redis.set('global:appStarted', int(init_time))
     print init_time
 
-def _perform_search(start, page):
-    from recorder.models import Recording
+def _to_timestamp(time_string):
     import calendar
     utc = pytz.timezone("UTC")
-    start = datetime.strptime(start, "%d.%m.%Y %H:%M")
-    start = pytz.timezone(app.config['APP_TZ']).localize(start)
-    start = utc.normalize(start.astimezone(utc))
+    time = datetime.strptime(time_string, "%d.%m.%Y %H:%M")
+    time = pytz.timezone(app.config['APP_TZ']).localize(time)
+    time = utc.normalize(time.astimezone(utc))
+    return calendar.timegm(time.utctimetuple()) 
 
-    start = calendar.timegm(start.utctimetuple()) 
-    recordings, num = Recording.search(
+def _perform_search(start, end = None, page = 1, min_len = 0, channel = -1):
+    from recorder.models import Recording
+    import calendar
+
+    start = _to_timestamp(start)
+
+    if end:
+        end = _to_timestamp(end)
+    else:
+        end = start+(3600*3)
+        
+    recordings, num = Recording.find_by_timestamp(
                             start, 
-                            start+(3600*3), 
+                            end,  
                             True,
-                            True,
-                            page)
+                            page,
+                            min_len,
+                            channel)
     num_pages = int(num/app.config['RECORDS_PER_PAGE'])
     return (recordings, num, num_pages)
 
@@ -71,10 +82,20 @@ def home():
 
     return message
 
-@app.route('/_search_simple', methods=['GET'])
-def _search_simple():
+@app.route('/_ajax_search', methods=['GET'])
+def _ajax_search():
     ret = dict()
     page = request.args.get('p', 1, type=int)
+    min_len = request.args.get('m', 0, type=int)
+    
+    try:
+        card_id, channel_id = request.args.get('d', "-1:-1").split(':')
+        card_id = int(card_id)
+        channel_id = int(channel_id)
+    except ValueError:
+        ret['error'] = u"Zła wartość parametru d=card_id:channel_id"
+        return ret
+
     try:
         if(request.args.get('s', "")):
             start = request.args.get('s', "")
@@ -82,23 +103,39 @@ def _search_simple():
         else:
             start = session.get('recording-search-start')
 
-        recordings, num, num_pages = _perform_search(start, page)
+        if(request.args.get('e', "")):
+            end = request.args.get('e', "")
+            session['recording-search-end'] = end 
+        else:
+            end = session.get('recording-search-end')
+
+        #if(min_len > 0):
+        #    session['recording-search-min'] = min_len
+        #else:
+        #    min_len = session.get('recording-search-min', 0)
+
+        recordings, num, num_pages = _perform_search(start, 
+                                                     end, 
+                                                     page, 
+                                                     min_len,
+                                                     channel_id)
 
         ret['recordings_table'] = render_template('result-table.html',
                                                   recordings=recordings)
-        if(num_pages > 1):
-            #TODO poprawić tą PAGINCJĘ!!
-            pages = range(1, num_pages + 1)
+        if(num > app.config['RECORDS_PER_PAGE']):
+            pages = range(1, num_pages + 2)
             ret['pagination'] = render_template('_table_pagination.html',
                                                 pages=pages,
                                                 page=page)
         ret['num'] = num
     except ValueError:
         session.pop('recording-search-start')
+        session.pop('recording-search-end')
         ret['error'] = u"Wybrana wartość daty nie jest w formacie" + \
             " 'dd.mm.yyyy HH:MM'"
 
     return jsonify(ret);
+
 
 @app.route('/search', methods=['GET', 'POST'])
 @templated()
@@ -113,15 +150,16 @@ def search():
     num = 0
     pagination = ""
     start = session.get('recording-search-start')
+    #Reset min_len session value
+    session.pop('recording-search-min')
     if(start):
         try:
-            recordings, num, num_pages = _perform_search(start, 1)
+            recordings, num, num_pages = _perform_search(start)
             recordings_table = render_template('result-table.html',
                                                recordings=recordings)
-            if(num_pages > 1):
+            if(num > app.config['RECORDS_PER_PAGE']):
                 page = 1
-                #pages = range(page, min(num_pages, page + 2) + 1)
-                pages = range(page, num_pages + 1)
+                pages = range(1, num_pages + 2)
                 pagination = render_template('_table_pagination.html',
                                              pages=pages,
                                              page=page)
@@ -137,6 +175,32 @@ def search():
             num=num,
             pagination=pagination
     )
+
+@app.route('/search/advanced')
+@templated()
+def search_advanced():
+    from recorder.models import Card, Desk
+    desks = []
+    for card in Card.all():
+        for desk in card.all_desks():
+            desks.append(desk)
+
+    return dict(
+        desks = desks,
+        recordings_table = render_template('result-table.html',
+                                           recordings = []),
+        num = 0,
+    )
+
+@app.route('/listen/<int:rid>', methods=['GET'])
+@templated()
+def listen(rid):
+   from recorder.models import Recording
+   recording = Recording.load(rid)
+   if recording != None:
+       return dict( recording = recording )
+   else:
+       abort(404)
 
 @app.route('/test')
 def test():

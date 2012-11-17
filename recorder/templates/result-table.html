@@ -18,7 +18,7 @@
             <td>{{recording.channel_id}}</td>
             <td>{{recording.duration}}</td>
             <td>{{recording.hr_timestamp()}}</td>
-            <td><a href="#">Odsłuchaj</a></td>
+            <td><a href="{{ url_for('listen', rid=recording.rid) }}">Odsłuchaj</a></td>
         </tr>
         {% endfor %}
         {% endautoescape %}

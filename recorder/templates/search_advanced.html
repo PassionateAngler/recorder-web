@@ -1,0 +1,138 @@
+{% extends "layout.html" %}
+{% block main %}
+<h4 class="alert_warning" style="display:none" id="alert">Błędna kolejność podanych dat</h4>
+<article class="module width_quarter">
+<header><h3>Podaj datę Od:</h3></header>
+<div class="module_content">
+    <form class="quick_search">
+    <input id="dp-from" type="text" value="Wybierz czas i datę" onfocus="if(!this._haschanged){this.value=''};this._haschanged=true;">
+    </form>
+</div>
+</article>
+
+<article class="module width_quarter">
+<header><h3>Podaj datę Do:</h3></header>
+<div class="module_content">
+    <form class="quick_search">
+    <input id="dp-to" type="text" value="Wybierz czas i datę" onfocus="if(!this._haschanged){this.value=''};this._haschanged=true;">
+    </form>
+</div>
+</article>
+<article class="module width_quarter">
+<header><h3>Sprecyzuj</h3></header>
+<div class="module_content">
+    <fieldset class="fieldset-details">
+        <div>
+        <label id="min-len-l-lab">Min. czas trwania:</label>
+        <input type="text" id="min-len" />
+        <label for="min-len" id="min-len-lab">sekund</label>
+        </div>
+        <div>
+        <label id="desk-select-lab">Stanowisko:</label>
+        <select id="desk-select">
+        <option value="-1:-1" selected="selected"> -- </option>
+        {% for desk in desks %}
+        <option value="{{ desk.card_id }}:{{ desk.channel_id }}">{{ desk.name }}</option>
+        {% endfor %}
+        </select>
+        </div>
+    </fieldset>
+</div>
+</article>
+
+<div style="clear:both;width:100%"></div>
+<article class="module width_full" id="search_results">
+<header id="search_results_header">
+{% autoescape false %}
+<h3 class="tabs_involved">Wyniki <span id="records-num">Znaleziono: ({{num}})</span></h3>
+{{ pagination }}
+</header>
+{{ recordings_table }}
+{% endautoescape %}
+</article>
+
+<script type="text/javascript">
+    jQuery(function($){
+        $('#min-len').val(0);
+        var to = $('#dp-to').val();
+        var to_ts = RecorderUi.get_timestamp(to);
+        var from = $('#dp-from').val();
+        var from_ts = RecorderUi.get_timestamp(from);
+        var send_ok = false;
+        var is_float = /^[0-9]*\.?[0-9]+$/;
+
+        var min_len = 0;
+        var desk = "-1:-1";
+
+        if(to_ts > 0 && from_ts > 0 && from_ts < to_ts)
+        {
+            send_ok = 1;
+        }
+
+        $('#dp-from').datetimepicker({
+            onSelect : function(value){
+                from = value;
+                from_ts = RecorderUi.get_timestamp(from);
+                to = $('#dp-to').val();
+                to_ts = RecorderUi.get_timestamp(to);
+                if(to_ts > 0){
+                    if(to_ts > from_ts){
+                        $("#alert").hide();
+                        $('#min-len').val(0);
+                        send_ok = true;
+                        $.getJSON(RecorderUi.SCRIPT_ROOT + '/_ajax_search', 
+                                  {s:from, e:to, m:0},
+                                  RecorderUi.parse_data                 
+                        );
+                    }else{
+                        send_ok = false;
+                        $("#alert").show();
+                    }
+                }
+            }
+        });
+        $('#dp-to').datetimepicker({
+            onSelect : function(value){
+                to = value;
+                to_ts = RecorderUi.get_timestamp(to);
+                from = $('#dp-from').val();
+                from_ts = RecorderUi.get_timestamp(from);
+                if(from_ts > 0){
+                    if(to_ts > from_ts){
+                        $("#alert").hide();
+                        $('#min-len').val(0);
+                        send_ok = true;
+                        $.getJSON(RecorderUi.SCRIPT_ROOT + '/_ajax_search', 
+                                  {s:from, e:to, m:0},
+                                  RecorderUi.parse_data                 
+                        );
+                    }else{
+                        send_ok = false;
+                        $("#alert").show();
+                    }
+                }
+            }
+        });
+        $("#min-len").numeric({ negative: false });
+        $('#min-len').keyup(function(){
+            if(send_ok && is_float.test($(this).val()))
+            {
+                min_len = $(this).val();
+                $.getJSON(RecorderUi.SCRIPT_ROOT + '/_ajax_search', 
+                          {s:from, e:to, m:min_len},
+                          RecorderUi.parse_data                 
+                );
+            }
+        });
+        $("#desk-select").change(function(){
+            if(send_ok){
+                desk = $(this).val();
+                $.getJSON(RecorderUi.SCRIPT_ROOT + '/_ajax_search', 
+                          {s:from, e:to, m:min_len, d:desk},
+                          RecorderUi.parse_data );                
+            }
+        });
+    });
+</script>
+
+{% endblock %}

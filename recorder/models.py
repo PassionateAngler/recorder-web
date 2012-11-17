@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import json
+import os
 from time import time
 from datetime import datetime 
 from pytz import timezone
@@ -141,6 +142,13 @@ class Desk(RedisBase, CardId, ChannelId):
         desk._is_new = False
         return desk
 
+    @staticmethod
+    def all(load = True):
+        if load:
+            return map(lambda rid: Recording.load(rid), Recording.all(False))
+        else:
+            return redis.zrangebyscore(Recording.TIMESTAMPS_KEY, 0, 2**32-1)
+
     @property
     def key(self):
         return self.KEY_STRING % (self.card_id, self._channel_id) 
@@ -192,6 +200,14 @@ class Recording(RedisBase, CardId, ChannelId):
         return self.INDEX_KEY % (self._card_id, self._channel_id)
 
     @property
+    def rid(self):
+        return self._rid
+
+    @property
+    def channel_id(self):
+        return self._channel_id
+
+    @property
     def path(self):
         return self._path
 
@@ -223,10 +239,16 @@ class Recording(RedisBase, CardId, ChannelId):
         date = date.astimezone(app_tz) 
         return date.strftime("%d-%m-%Y %H:%M")
 
+    def path_url(self):
+        return "/".join((app.config['RECORDINGS_URL'], self.path))
+
+    def path_real(self):
+        return os.path.join(app.config['RECORDINGS_DIR'], self.path)
+
     @staticmethod
     def load(rid):
         r_db = redis.hgetall(Recording.KEY_STRING % rid)
-        if r_db != None: 
+        if len(r_db): 
             rec = Recording(**r_db)
             rec._is_new = False 
             rec._rid = rid 
@@ -238,27 +260,29 @@ class Recording(RedisBase, CardId, ChannelId):
     def last():
         return Recording.load(redis.get("global:nextRecordingId"));
 
-    #TODO dopisać funkcje obsługujące wyszukiwanie po timestampach
-    #     dodać do poniższej funkcji obsługę sesji
     @staticmethod
-    def search(start, end, sort_len = False, load = False, page = 0):
+    def find_by_timestamp(start, end, sort_len = False, page = 0, min_len = 0,
+            channel = -1):
         recordings = redis.zrangebyscore(Recording.TIMESTAMPS_KEY, start, end)
         lenght = len(recordings)
         tmp_key = "recording:tmp:search:%s:%s" % (int(start), int(end))
-        start_limit = app.config['RECORDS_PER_PAGE'] * (page - 1)
+
+        if(page > 0):
+            start_limit = app.config['RECORDS_PER_PAGE'] * (page - 1)
+        else:
+            start_limit = 0
+
+        if not redis.exists(tmp_key):
+            pipe = redis.pipeline()
+            map(lambda r: pipe.sadd(tmp_key, r), recordings)
+            pipe.execute()
+        else:
+            #Reset expire time
+            redis.persist(tmp_key)
+        #Set expiration time
+        redis.expire(tmp_key, 60);
 
         if(sort_len):
-            if not redis.exists(tmp_key):
-                from time import time
-                from random import randint
-                pipe = redis.pipeline()
-                map(lambda r: pipe.sadd(tmp_key, r), recordings)
-                pipe.execute()
-            else:
-                #Reset expire time
-                redis.persist(tmp_key)
-            #Set expiration time
-            redis.expire(tmp_key, 60);
             if(page > 0):
                 #Return One page of records
                 recordings = redis.sort(tmp_key, 
@@ -280,10 +304,21 @@ class Recording(RedisBase, CardId, ChannelId):
                 recordings = recordings[start_limit :
                                         app.config['RECORDS_PER_PAGE']]
 
-        if(load):
-            return (map(lambda r_id: Recording.load(r_id), recordings), lenght)
+        if(min_len > 0 or channel >= 0):
+            ret = []
+            for r_id in recordings:
+                recording = Recording.load(r_id)
+                if(min_len > recording.duration):
+                    if(sort_len):
+                        break;
+                    else:
+                        continue;
+                if(channel >= 0 and channel != recording.channel_id):
+                    continue;
+                ret.append(recording)
+            return (ret, len(ret))
         else:
-            return (recordings, lenght)
+            return (map(lambda r_id: Recording.load(r_id), recordings), lenght)
 
     @staticmethod
     def count_all():

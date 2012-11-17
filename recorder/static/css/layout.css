@@ -898,3 +898,48 @@ table .col_2{ width:20%}
 .ui-timepicker-div dl dd { margin: 0 10px 10px 65px; }
 .ui-timepicker-div td { font-size: 90%; }
 .ui-tpicker-grid-label { background: none; border: none; margin: 0; padding: 0; }
+/*Details*/
+.fieldset-details{
+  border:none;
+  background:inherit;
+}
+
+.fieldset-details input[type="text"]{
+  margin:0;
+  padding:0;
+}
+
+#min-len{
+  width:44px;
+  text-align:right;
+  padding-right:3px;
+  padding-left:3px;
+}
+
+#min-len-lab{
+  width:50px;
+  margin: -1px 0 5px;
+  padding-left: 5px;
+}
+
+#min-len-l-lab{
+  margin: -1px 0 5px;
+  padding:0;
+  width:130px;
+}
+
+#desk-select{
+  margin:0;
+  width:140px;
+}
+
+#desk-select-lab{
+  margin: -1px 0 5px;
+  padding:0;
+  width:90px;
+}
+
+.fieldset-details label{
+  float:left;
+  padding:0;
+}

@@ -282,6 +282,7 @@ class Recording(RedisBase, CardId, ChannelId):
         #Set expiration time
         redis.expire(tmp_key, 60);
 
+        #Redesigning
         if(sort_len):
             if(page > 0):
                 #Return One page of records

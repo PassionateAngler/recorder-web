@@ -263,63 +263,56 @@ class Recording(RedisBase, CardId, ChannelId):
     @staticmethod
     def find_by_timestamp(start, end, sort_len = False, page = 0, min_len = 0,
             channel = -1):
-        recordings = redis.zrangebyscore(Recording.TIMESTAMPS_KEY, start, end)
-        lenght = len(recordings)
-        tmp_key = "recording:tmp:search:%s:%s" % (int(start), int(end))
 
         if(page > 0):
             start_limit = app.config['RECORDS_PER_PAGE'] * (page - 1)
         else:
             start_limit = 0
 
-        if not redis.exists(tmp_key):
-            pipe = redis.pipeline()
-            map(lambda r: pipe.sadd(tmp_key, r), recordings)
-            pipe.execute()
-        else:
-            #Reset expire time
-            redis.persist(tmp_key)
-        #Set expiration time
-        redis.expire(tmp_key, 60);
-
-        #Redesigning
-        if(sort_len):
-            if(page > 0):
-                #Return One page of records
-                recordings = redis.sort(tmp_key, 
-                                        start_limit,
-                                        app.config['RECORDS_PER_PAGE'], 
-                                        "recording:*->duration",
-                                        None,
-                                        True) 
-            else:
-                #Return all records
-                recordings = redis.sort(tmp_key, 
-                                        None, 
-                                        None, 
-                                        "recording:*->duration",
-                                        None,
-                                        True) 
-        else:
-            if(page > 0):
-                recordings = recordings[start_limit :
-                                        app.config['RECORDS_PER_PAGE']]
-
-        if(min_len > 0 or channel >= 0):
-            ret = []
-            for r_id in recordings:
-                recording = Recording.load(r_id)
-                if(min_len > recording.duration):
-                    if(sort_len):
-                        break;
-                    else:
+        #Search key : recording:tmp:search:<ch_id>:<min_len>:<start>:<end>
+        search_key = "recording:tmp:search:%s:%s:%s:%s" % (int(channel),
+                                                       int(min_len), 
+                                                       int(start), 
+                                                       int(end))
+        if not redis.exists(search_key):
+            recordings = redis.zrangebyscore(Recording.TIMESTAMPS_KEY, start, end)
+            #filter recordings by lenght and channel_id
+            if(min_len > 0 or channel >= 0):
+                recordings_filtered = []
+                for r_id in recordings:
+                    recording = Recording.load(r_id)
+                    if(min_len > recording.duration):
                         continue;
-                if(channel >= 0 and channel != recording.channel_id):
-                    continue;
-                ret.append(recording)
-            return (ret, len(ret))
+                    if(channel >= 0 and channel != recording.channel_id):
+                        continue;
+                    recordings_filtered.append(r_id)
+                recordings = recordings_filtered
+
+            pipe = redis.pipeline()
+            map(lambda r: pipe.sadd(search_key, r), recordings)
+            pipe.execute()
+
+        #Set expiration time
+        redis.expire(search_key, 3600);
+
+        if(sort_len):
+            #Return all records
+            recordings = redis.sort(search_key, 
+                                    None, 
+                                    None, 
+                                    "recording:*->duration",
+                                    None,
+                                    True) 
         else:
-            return (map(lambda r_id: Recording.load(r_id), recordings), lenght)
+            recordings = redis.smembers(search_key)
+
+        lenght = len(recordings)
+
+        if(page > 0):
+            recordings = recordings[start_limit :
+                                    start_limit + app.config['RECORDS_PER_PAGE']]
+
+        return (map(lambda r_id: Recording.load(r_id), recordings), lenght)
 
     @staticmethod
     def count_all():

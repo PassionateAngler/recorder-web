@@ -76,11 +76,10 @@ def _perform_search(start, end = None, page = 1, min_len = 0, channel = -1):
 @app.route('/')
 def home():
     if not app_is_init(): 
-        message = app_init();
+        return app_init();
     else:
-        message = 'App running!'
-
-    return message
+        #message = 'App running!'
+        return redirect(url_for('search'))
 
 @app.route('/_ajax_search', methods=['GET'])
 def _ajax_search():
@@ -100,19 +99,28 @@ def _ajax_search():
         if(request.args.get('s', "")):
             start = request.args.get('s', "")
             session['recording-search-start'] = start
+            session['recording-search-min'] = min_len
+            session['recording-channel_id'] = channel_id
         else:
             start = session.get('recording-search-start')
 
         if(request.args.get('e', "")):
             end = request.args.get('e', "")
             session['recording-search-end'] = end 
+            session['recording-search-min'] = min_len
+            session['recording-channel_id'] = channel_id
         else:
             end = session.get('recording-search-end')
 
-        #if(min_len > 0):
-        #    session['recording-search-min'] = min_len
-        #else:
-        #    min_len = session.get('recording-search-min', 0)
+        if(min_len > 0):
+            session['recording-search-min'] = min_len
+        else:
+            min_len = session.get('recording-search-min', 0)
+
+        if(channel_id >= 0):
+            session['recording-channel_id'] = channel_id
+        else:
+            channel_id = session.get('recording-channel_id', 0)
 
         recordings, num, num_pages = _perform_search(start, 
                                                      end, 
@@ -129,8 +137,8 @@ def _ajax_search():
                                                 page=page)
         ret['num'] = num
     except ValueError:
-        session.pop('recording-search-start')
-        session.pop('recording-search-end')
+        session.pop('recording-search-start', "")
+        session.pop('recording-search-end', "")
         ret['error'] = u"Wybrana wartość daty nie jest w formacie" + \
             " 'dd.mm.yyyy HH:MM'"
 
@@ -151,7 +159,8 @@ def search():
     pagination = ""
     start = session.get('recording-search-start')
     #Reset min_len session value
-    session.pop('recording-search-min')
+    session.pop('recording-search-min', 0)
+    session.pop('recording-channel_id', -1)
     if(start):
         try:
             recordings, num, num_pages = _perform_search(start)
@@ -168,6 +177,7 @@ def search():
             session.pop('recording-search-start')
 
     return dict(
+            title=u"Wyszukiwanie proste",
             section_title=u"Wyszukiwanie proste",
             default_date=date,
             default_date_str=date.strftime("%d.%m.%Y"),
@@ -186,6 +196,8 @@ def search_advanced():
             desks.append(desk)
 
     return dict(
+        title=u"Wyszukiwanie zaawansowane",
+        section_title=u"Wyszukiwanie zaawansowane",
         desks = desks,
         recordings_table = render_template('result-table.html',
                                            recordings = []),
@@ -198,9 +210,110 @@ def listen(rid):
    from recorder.models import Recording
    recording = Recording.load(rid)
    if recording != None:
-       return dict( recording = recording )
+       return dict( 
+            title=u"Odsłuchaj",
+            section_title=u"Odsłuchaj",
+            recording = recording 
+       )
    else:
        abort(404)
+
+def _can_edit():
+    lock_id = redis.get("tmp:deskLockId")
+    if(lock_id):
+        lock_id = long(lock_id)
+    else:
+        lock_id = 0
+
+    edit_ok = (lock_id == long(session.get("desk_edit_lock_id", -1)))
+
+    return (edit_ok, lock_id)
+
+@app.route('/_desks_update', methods=['POST'])
+def desks_update():
+    import json
+    from recorder.models import Desk
+
+    edit_ok, lock_id = _can_edit()
+
+    if(edit_ok):
+        redis.expire("tmp:deskLockId", 120)
+    else:
+        #Somebody else is editing
+        return {'error':u"Błąd, edycja zablokowana"}
+
+    ret = dict()
+    with redis.pipeline() as pipe:
+        try:
+            desks = json.loads(request.form.get('desks', ""))
+            if(len(desks) != 8):
+                raise ValueError
+            for ch_id, desk in enumerate(desks):
+                redis.set(Desk.KEY_STRING % (0, ch_id),
+                          json.dumps({'name': desk['name'],
+                                     'description': desk['desc']})
+                )
+            pipe.execute()
+            ret["status"] = "OK"
+        except ValueError, KeyError:
+            ret['error'] = u"Błędne dane w POST"
+
+    return jsonify(ret)
+
+@app.route('/desks')
+@templated()
+def desks():
+    import time
+    from recorder.models import Card, Desk
+
+    edit_ok, lock_id = _can_edit()
+
+    if(edit_ok):
+        #Could edit, we started edition and continuing it
+        redis.expire("tmp:deskLockId", 120)
+    elif(lock_id == 0):
+        #No one is editing
+        session['desk_edit_lock_id'] = "%s" % long(time.time() * 1000)
+        redis.set("tmp:deskLockId", session['desk_edit_lock_id'])
+        redis.expire("tmp:deskLockId", 120)
+        edit_ok = True
+
+    desks = []
+    for card in Card.all():
+        for desk in card.all_desks():
+            desks.append(desk)
+    return dict(
+            title = u"Stanowiska",
+            section_title = u"Stanowiska",
+            desks = desks,
+            edit_ok = edit_ok,
+    )
+
+@app.route('/desk/edit/<int:card_id>/<int:channel_id>', methods=['GET', 'POST'])
+@templated()
+def edit_desk(card_id, channel_id):
+    from models import Desk
+
+    edit_ok, lock_id = _can_edit()
+    if(edit_ok):
+        redis.expire("tmp:deskLockId", 120)
+    else:
+       #Somebody else is editing
+       return redirect(url_for('desks'))
+
+    desk = Desk.load(card_id, channel_id)
+    if not desk:
+        abort(404)
+
+    if(request.form):
+       desk.name = request.form['name'] 
+       desk.description = request.form['description'] 
+       desk.save()
+       return redirect(url_for('desks'))
+
+    return dict(
+       desk = desk
+    ) 
 
 @app.route('/test')
 def test():

@@ -79,6 +79,7 @@
                     if(to_ts > from_ts){
                         $("#alert").hide();
                         $('#min-len').val(0);
+                        $("#desk-select").val("-1:-1");
                         send_ok = true;
                         $.getJSON(RecorderUi.SCRIPT_ROOT + '/_ajax_search', 
                                   {s:from, e:to, m:0},
@@ -101,6 +102,7 @@
                     if(to_ts > from_ts){
                         $("#alert").hide();
                         $('#min-len').val(0);
+                        $("#desk-select").val("-1:-1");
                         send_ok = true;
                         $.getJSON(RecorderUi.SCRIPT_ROOT + '/_ajax_search', 
                                   {s:from, e:to, m:0},

@@ -1,0 +1,80 @@
+{% extends "layout.html" %}
+{% block main %}
+{% if edit_ok: %}
+<h4 class="alert_info">Aby zmieńć kanał przeciągnij i upuść stanowisko na wybraną pozycję.</h4>
+{% else: %}
+<h4 class="alert_error">Nie możesz teraz edytować stanowisk, ktoś inny to robi.</h4>
+{% endif %}
+<article class="module width_full">
+<header>
+<h3>Stanowiska</h3>
+</header>
+<table class="tablesorter" id="table-channels" cellspacing="0"> 
+    <thead>
+        <tr>
+            <th>Kanał</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for desk in desks %}
+        <tr><td>{{desk.channel_id}}</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+<table class="tablesorter" id="table-desks" cellspacing="0"> 
+    <thead> 
+    	<tr> 
+    	<th>Nazwa</th> 
+        <th>Opis</th>
+        <th></th>
+    	</tr> 
+    </thead> 
+    <tbody> 
+        {% autoescape false %}
+        {% for desk in desks %}
+        <tr id="desk_{{desk.channel_id}}">
+            <td class="c_1">{{desk.name}}</td>
+            <td class="c_2">{{desk.description}}</td>
+            <td class="c_3">
+                {% if edit_ok: %}
+                <a href="{{ url_for('edit_desk', card_id=desk.card_id, channel_id=desk.channel_id) }}">Edytuj</a>
+                {% else: %}
+                &nbsp;
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        {% endautoescape %}
+
+    </tbody> 
+</table>
+<div style="width:100%;clear:both;"></div>
+</article>
+{% if edit_ok: %}
+<script type="text/javascript">
+    jQuery(function(){
+        var fixHelper = function(e, ui) {
+            ui.children().each(function() {
+                $(this).width($(this).width());
+            });
+            return ui;
+        };
+        $("#table-desks tbody").sortable({
+            helper:fixHelper,
+            update: function(ev, ui){
+                var desks = new Array();
+                $("#table-desks tbody tr").each(function(){
+                    desks.push({name: $(this).children(".c_1").html(),
+                                desc: $(this).children(".c_2").html()});
+                });
+                $.ajax({
+                    type: 'POST',
+                    url: RecorderUi.SCRIPT_ROOT + '/_desks_update',
+                    data: {desks: JSON.stringify(desks)}});
+            }
+        }).disableSelection();
+    });
+</script>
+{% endif %}
+{% endblock %}
+

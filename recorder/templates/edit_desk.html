@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block main %}
+<article class="module width_full">
+<header><h3>Edytuj stanowisko (kanał: {{desk.channel_id}})</h3></header>
+     <form action="{{ url_for('edit_desk', card_id=desk.card_id, channel_id=desk.channel_id) }}" method="POST">
+     <div class="module_content">
+        <fieldset>
+            <label>Nazwa</label>
+            <input type="text" name='name' value="{{ desk.name }}" />
+        </fieldset>
+        <fieldset>
+            <label>Opis</label>
+            {% autoescape false %}
+            <textarea rows="12" name='description'>{{ desk.description }}</textarea>
+            {% endautoescape %}
+        </fieldset>
+     </div>
+     <footer>
+      <div class="submit_link">
+      <input type="submit" value="Zapisz" class="alt_btn" name='submit'/>
+      </div>
+       </footer>
+    </form>
+</article>
+{% endblock %}

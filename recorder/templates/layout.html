@@ -3,7 +3,7 @@
 
 <head>
 	<meta charset="utf-8"/>
-	<title>Dashboard I Admin Panel</title>
+        <title>Recorder | {{ title }}</title>
         <link rel="stylesheet" 
             href="{{ url_for('static', filename='css/smoothness/jquery-ui-1.8.24.custom.css') }}" 
             type="text/css" media="screen" />
@@ -30,7 +30,7 @@
 	<script type="text/javascript">
 	$(document).ready(function() {
             RecorderUi.SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
-      	    $(".tablesorter").tablesorter(); 
+      	    $(".tablesorter-sort").tablesorter(); 
 	    //When page loads...
 	    $(".tab_content").hide(); //Hide all content
 	    $("ul.tabs li:first").addClass("active").show(); //Activate first tab
@@ -95,23 +95,24 @@
                     <li class="icn_search"><a href="{{ url_for('search') }}">Wyszukiwanie</a></li>
 			<li class="icn_folder"><a href="{{ url_for('search_advanced') }}">Wyszukiwanie
                             (zaawansowane)</a></li>
-			<li class="icn_categories"><a href="#">Najnowsze (93)</a></li>
+			<!--<li class="icn_categories"><a href="#">Najnowsze (93)</a></li>-->
 		</ul>
 		<h3>Stanowiska</h3>
 		<ul class="toggle">
-			<li class="icn_view_users"><a href="#">Przeglądaj</a></li>
-			<li class="icn_add_user"><a href="#">Edytuj</a></li>
+			<li class="icn_view_users"><a href="{{ url_for('desks') }}">Przeglądaj</a></li>
+			<!--<li class="icn_add_user"><a href="#">Edytuj</a></li>-->
 		</ul>
+                <!--
 		<h3>Statystyki</h3>
 		<ul class="toggle">
 			<li class="icn_settings"><a href="#">Dzień</a></li>
 			<li class="icn_settings"><a href="#">Tydzień</a></li>
 			<li class="icn_settings"><a href="#">Miesiąc</a></li>
 		</ul>
+                -->
 		<footer>
 			<hr />
-			<p><strong>Copyright &copy; 2011 Website Admin</strong></p>
-			<p>Theme by <a href="http://www.medialoot.com">MediaLoot</a></p>
+			<p><strong>Copyright &copy; Paweł Tomasiewicz</strong></p>
 		</footer>
 	</aside><!-- end of sidebar -->
 	

@@ -943,3 +943,23 @@ table .col_2{ width:20%}
   float:left;
   padding:0;
 }
+
+#table-channels{
+  width:5%;
+  float:left;
+}
+#table-desks{
+  width:95%;
+  float:left;
+}
+
+#table-desks td, #table-channels td{
+  height:60px;
+  overflow:hidden;
+}
+
+#table-channels td{
+  text-align:right;
+  font-weight:bold;
+}
+

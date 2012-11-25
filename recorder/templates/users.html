@@ -1,0 +1,29 @@
+{% extends "layout.html" %}
+{% block main %}
+<article class="module width_full">
+<header>
+<h3>Stanowiska</h3>
+</header>
+<table class="tablesorter" cellspacing="0"> 
+    <thead>
+        <tr>
+            <th>Email</th>
+            <th>Uprawnienia (specjalne)</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for u in users %}
+        <tr>
+            <td>{{u.email}}</td>
+            <td>{{", ".join(u.roles)}}</td>
+            <td><a href="{{ url_for('user_edit', email=u.email) }}">Edytuj</a> |
+                <a href="{{ url_for('user_delete', email=u.email) }}">Usuń</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<div class="clear"></div>
+</article>
+{% endblock %}

@@ -5,7 +5,9 @@ from time import time
 from datetime import datetime 
 from pytz import timezone
 
-from recorder import app,redis
+from recorder import app, redis
+from recorder import bcrypt
+from flask.ext.login import UserMixin
 
 class RedisBase(object):
     KEY_STRING = ""
@@ -21,6 +23,163 @@ class RedisBase(object):
     @property
     def key(self):
         return self.KEY_STRING
+
+class Role(RedisBase):
+    KEY_STRING = "role:%s"
+    INDEX_KEY = "roles"
+    def __init__(self, **kwargs):
+        self._is_new = False
+        self._name = kwargs.get('name')
+        self.description = unicode(kwargs.get('description'), "utf8")
+
+    def __str__(self):
+        return "<Name: %s, Description: %s>" % (self.name, self.description)
+
+    def __repr__(self):
+        return self.__str__()
+    
+    def save(self):
+        if self._is_new and redis.exists(self.key):
+            print "Save failed. Key '%s' exists." % self.key
+            return False
+        else:
+            with redis.pipeline() as pipe:
+                try:
+                    pipe.set(self.key, self.description)
+                    pipe.sadd(self.INDEX_KEY, self.name)
+                    pipe.execute()
+                    return True
+                except ValueError, KeyError:
+                    return False
+
+    def delete(self):
+        with redis.pipeline() as pipe:
+            pipe.delete(self.key)
+            pipe.srem(Role.INDEX_KEY, self.name)
+            pipe.execute()
+        self = None
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def key(self):
+        return self.KEY_STRING % (self.name) 
+
+    @staticmethod
+    def load(name):
+        key = Role.KEY_STRING % name
+        if redis.exists(key):
+            r = Role(**{'name': name, 'description': redis.get(key)})
+            r._is_new = False
+            return r
+        else:
+            return None
+
+    @staticmethod
+    def all(load = True):
+        if load:
+            return map(lambda name: Role.load(name), Role.all(False))
+        else:
+            return redis.smembers(Role.INDEX_KEY)
+
+class User(RedisBase, UserMixin):
+    KEY_STRING = "user:%s"
+    ROLES_KEY = "user:%s:roles"
+    INDEX_KEY = "users"
+
+    roles = ()
+
+    def __str__(self):
+        return "<User: %s>" % self.email
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __init__(self, **kwargs):
+        super(User, self).__init__()
+        self._is_new = True
+        self._email = kwargs.get('email')
+        self._password = bcrypt.generate_password_hash(kwargs.get('password'))
+        if kwargs.get('roles'):
+            self.roles = kwargs.get('roles')
+
+    def save(self):
+        if self._is_new and redis.exists(self.key):
+            print "Save failed. Key '%s' exists." % self.key
+            return False
+        else:
+            with redis.pipeline() as pipe:
+                try:
+                    pipe.hset(
+                        self.key, 
+                        "password", self.password
+                    )
+                    pipe.delete(self.roles_key)
+                    for role in self.roles:
+                        pipe.sadd(self.roles_key, role)
+                    pipe.sadd(self.INDEX_KEY, self.email)
+                    self._is_new = False
+                    pipe.execute()
+                    return True
+                except ValueError, KeyError:
+                    return False
+                
+
+    def delete(self):
+        with redis.pipeline() as pipe:
+            pipe.delete(self.key)
+            pipe.delete(self.roles_key)
+            pipe.srem(User.INDEX_KEY, self.email)
+            pipe.execute()
+        self = None
+
+    def get_id(self):
+        return self.email
+
+    def check_password(self, word):
+        return bcrypt.check_password_hash(self._password, word)
+
+    @property
+    def email(self):
+        return u"%s" % self._email
+
+    @property
+    def password(self):
+        return self._password
+
+    @password.setter
+    def password(self, raw_password):
+        self._password = bcrypt.generate_password_hash(raw_password)
+
+    @property
+    def key(self):
+        return self.KEY_STRING % (self._email) 
+
+    @property
+    def roles_key(self):
+        return self.ROLES_KEY % (self._email) 
+
+    @staticmethod
+    def load(email):
+        u_db = redis.hgetall(User.KEY_STRING % email)
+        if len(u_db): 
+            u_db['roles'] = redis.smembers(User.ROLES_KEY % email)
+            u = User(**u_db)
+            u._is_new = False 
+            u._email = email 
+            u._password = u_db.get('password') 
+            return u 
+        else:
+            return None
+
+    @staticmethod
+    def all(load = True):
+        if load:
+            return map(lambda email: User.load(email), User.all(False))
+        else:
+            return redis.smembers(User.INDEX_KEY)
 
 class CardId(object):
     @property

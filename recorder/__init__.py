@@ -4,12 +4,19 @@ import pytz
 from os import path, environ
 from datetime import datetime
 from flask import Flask, redirect, url_for, render_template, jsonify, request, \
-                    session, abort
+    session, abort, current_app
+from flask.ext.login import LoginManager, login_user, logout_user, \
+    login_required, current_user
+from flask_principal import Principal, Permission, RoleNeed, UserNeed, Identity, \
+    AnonymousIdentity, identity_changed, identity_loaded
+from flask.ext.bcrypt import Bcrypt
 from flask.ext.redis import Redis
 
 #from testapp import settings
 #from recorder import settings
 from recorder.decorators import templated
+from recorder.forms import LoginForm, ChangePasswordForm, UserAddForm, \
+    UserEditForm
 
 # Initialize simple Flask application
 app = Flask(__name__)
@@ -28,6 +35,35 @@ app.secret_key = '\xc3G\x1e\x16\xca\xed\x02\x01T\xc9\xe9?t\xc6\xa7\x1f\xf5\x17\x
 
 # Setup Redis conection
 redis = Redis(app)
+bcrypt = Bcrypt(app)
+
+login_manager = LoginManager()
+login_manager.setup_app(app)
+
+principals = Principal(app)
+
+@login_manager.user_loader
+def load_user(email):
+    from recorder.models import User
+    return User.load(email)
+
+@identity_loaded.connect_via(app)
+def on_identity_loaded(sender, identity):
+    identity.user = current_user
+
+    if hasattr(current_user, 'email'):
+        identity.provides.add(UserNeed(current_user.email))
+
+    if hasattr(current_user, 'roles'):
+        for role in current_user.roles:
+            identity.provides.add(RoleNeed(role))
+
+def create_roles():
+    from recorder.models import Role
+    roles = [{'name': 'users', 'description': "Zarządzaj użytkownikami"},
+             {'name': 'recorder', 'description': "Zarządzaj nagraniami"}]
+    for role in roles:
+        Role(**role).save()
 
 def app_is_init():
     return True if redis.get('global:appStarted') != None else False 
@@ -37,13 +73,158 @@ def app_init():
         return 
     if not path.isdir(app.config['RECORDINGS_DIR']):
         return "%s do not exists!" % app.config['RECORDINGS_DIR']
+
+    create_roles()
     redis.set('global:nextRecordingId', 0)
-    #redis.set('global:nextCardId', 0)
-    #redis.set('global:nextDeskId', 0)
     init_time = time.time()
     redis.set('global:appStarted', int(init_time))
     print init_time
 
+permissions = { 'users': Permission(RoleNeed('users')),
+                'recorder': Permission(RoleNeed('recorder')) }
+
+def _default_response():
+    return {'current_user': current_user,
+            'permissions' : permissions}
+
+@app.route('/')
+def home():
+    if not app_is_init(): 
+        return app_init();
+    else:
+        if current_user.is_anonymous(): 
+            return redirect(url_for('login'))
+        else:
+            return redirect(url_for('search'))
+
+#Users login and managment
+@app.route('/login', methods=('GET', 'POST'))
+@templated()
+def login():
+    message = ""
+    form = LoginForm()
+    if form.validate_on_submit():
+        from recorder.models import User
+        user = User.load(form.email.data)
+        if user and user.check_password(form.password.data):
+            login_user(user)
+            identity_changed.send(current_app._get_current_object(),
+                                  identity=Identity(user.email))
+            return redirect(url_for('search'))
+        else:
+            message = u"Zły użytkownik lub hasło"
+
+    return {'form' : form, 'message' : message}
+
+@app.route('/logout')
+def logout():
+    logout_user()
+    identity_changed.send(current_app._get_current_object(),
+                          identity=AnonymousIdentity())
+    return redirect(url_for('login'))
+
+@app.route('/users')
+@templated()
+def users():
+    with permissions['users'].require():
+        from recorder.models import Role, User
+        ret = _default_response()
+        ret['title'] =  u"Użytkownicy"
+        ret['section_title'] = u"Użytkownicy"
+        users = User.all()
+        for u in users:
+            u.roles = map(lambda r: Role.load(r).description, u.roles)
+        ret['users'] = users
+        return ret
+
+@app.route('/user/add', methods=['GET', 'POST']) 
+@templated() 
+def user_add():
+    with permissions['users'].require():
+        from recorder.models import Role
+        ret = _default_response()
+        ret['form'] = UserAddForm()
+        ret['form'].roles.choices = [(r.name, r.description) for r in Role.all()]
+        ret['title'] =  u"Dodaj użytkownika"
+        ret['section_title'] = u"Dodaj użytkownika"
+
+        if ret['form'].validate_on_submit():
+            if ret['form'].password.data == ret['form'].re_password.data:
+                from recorder.models import User
+                user = User(**{'email':ret['form'].email.data, 
+                               'password' : ret['form'].password.data,
+                               'roles' : ret['form'].roles.data })
+                user.save()
+            else:
+                ret['error'] = u"Podano dwa różne hasła"
+        return ret
+
+@app.route('/user/edit/<string:email>', methods=['GET', 'POST']) 
+@templated() 
+def user_edit(email):
+    with permissions['users'].require():
+        from recorder.models import Role, User 
+        user = User.load(email)
+        if not user:
+            return abort(404)
+
+        ret = _default_response()
+        ret['form'] = UserEditForm()
+        ret['form'].roles.choices = [(r.name, r.description) for r in Role.all()]
+        ret['user'] = user
+        ret['title'] =  u"Edtuj konto"
+        ret['roles'] = user.roles
+        ret['section_title'] = u"Edytuj konto"
+
+        if request.method == 'POST' and ret['form'].validate_on_submit():
+            if ret['form'].password.data == ret['form'].re_password.data:
+                if ret['form'].password.data:
+                    user.password = ret['form'].password.data
+                user.roles = ret['form'].roles.data
+                user.save()
+                return redirect('users')
+            else:
+                ret['error'] = u"Podano dwa różne hasła"
+
+        return ret
+
+@app.route('/user/delete/<string:email>', methods=['GET']) 
+@templated() 
+def user_delete(email):
+    with permissions['users'].require():
+        from recorder.models import Role, User 
+        user = User.load(email)
+        user.delete()
+        return redirect('users')
+
+@app.route('/user/change_password', methods=['GET', 'POST'])
+@login_required
+@templated()
+def change_password():
+    ret = _default_response()
+    ret['form'] = ChangePasswordForm()
+    ret['title'] =  u"Zmień hasło"
+    ret['section_title'] = u"Zmień hasło"
+
+    if ret['form'].validate_on_submit():
+        from recorder.models import User
+        if not current_user.check_password(ret['form'].current_password.data): 
+            ret['error'] =  u"Podano błędne OBECNE hasło"
+            return ret 
+
+        if ret['form'].password.data != ret['form'].re_password.data:
+            ret['error'] = u"Hasło i jego powtórzenie są różne"
+            return ret 
+
+        current_user.password = ret['form'].password.data
+        if current_user.save():
+            ret['success'] = u"Zmieniono hasło"
+        else:
+            ret['error'] = u"Coś poszło nie tak, nie można zmieńć hasła"
+    
+    return ret
+
+#Recordings managment views and functions
 def _to_timestamp(time_string):
     import calendar
     utc = pytz.timezone("UTC")
@@ -73,15 +254,8 @@ def _perform_search(start, end = None, page = 1, min_len = 0, channel = -1):
     num_pages = int(num/app.config['RECORDS_PER_PAGE'])
     return (recordings, num, num_pages)
 
-@app.route('/')
-def home():
-    if not app_is_init(): 
-        return app_init();
-    else:
-        #message = 'App running!'
-        return redirect(url_for('search'))
-
-@app.route('/_ajax_search', methods=['GET'])
+@app.route('/_ajax_search')
+@login_required
 def _ajax_search():
     ret = dict()
     page = request.args.get('p', 1, type=int)
@@ -146,6 +320,7 @@ def _ajax_search():
 
 
 @app.route('/search', methods=['GET', 'POST'])
+@login_required
 @templated()
 def search():
     from recorder.models import Recording
@@ -176,17 +351,19 @@ def search():
         except ValueError:
             session.pop('recording-search-start')
 
-    return dict(
-            title=u"Wyszukiwanie proste",
-            section_title=u"Wyszukiwanie proste",
-            default_date=date,
-            default_date_str=date.strftime("%d.%m.%Y"),
-            recordings_table=recordings_table,
-            num=num,
-            pagination=pagination
-    )
+    ret = _default_response()
+    ret['title']=u"Wyszukiwanie proste"
+    ret['section_title']=u"Wyszukiwanie proste"
+    ret['default_date']=date
+    ret['default_date_str']=date.strftime("%d.%m.%Y")
+    ret['recordings_table']=recordings_table
+    ret['num']=num
+    ret['pagination']=pagination
+
+    return ret
 
 @app.route('/search/advanced')
+@login_required
 @templated()
 def search_advanced():
     from recorder.models import Card, Desk
@@ -195,26 +372,26 @@ def search_advanced():
         for desk in card.all_desks():
             desks.append(desk)
 
-    return dict(
-        title=u"Wyszukiwanie zaawansowane",
-        section_title=u"Wyszukiwanie zaawansowane",
-        desks = desks,
-        recordings_table = render_template('result-table.html',
-                                           recordings = []),
-        num = 0,
-    )
+    ret = _default_response()
+    ret['title']=u"Wyszukiwanie zaawansowane"
+    ret['section_title']=u"Wyszukiwanie zaawansowane"
+    ret['desks'] = desks
+    ret['recordings_table']= render_template('result-table.html', recordings = [])
+    ret['num']= 0
+    return ret
 
 @app.route('/listen/<int:rid>', methods=['GET'])
+@login_required
 @templated()
 def listen(rid):
    from recorder.models import Recording
    recording = Recording.load(rid)
    if recording != None:
-       return dict( 
-            title=u"Odsłuchaj",
-            section_title=u"Odsłuchaj",
-            recording = recording 
-       )
+        ret = _default_response()
+        ret['title']=u"Odsłuchaj",
+        ret['section_title']=u"Odsłuchaj",
+        ret['recording ']= recording 
+        return ret
    else:
        abort(404)
 
@@ -230,37 +407,40 @@ def _can_edit():
     return (edit_ok, lock_id)
 
 @app.route('/_desks_update', methods=['POST'])
+@login_required
 def desks_update():
-    import json
-    from recorder.models import Desk
+    with permissions['recorder'].require():
+        import json
+        from recorder.models import Desk
 
-    edit_ok, lock_id = _can_edit()
+        edit_ok, lock_id = _can_edit()
 
-    if(edit_ok):
-        redis.expire("tmp:deskLockId", 120)
-    else:
-        #Somebody else is editing
-        return {'error':u"Błąd, edycja zablokowana"}
+        if(edit_ok):
+            redis.expire("tmp:deskLockId", 120)
+        else:
+            #Somebody else is editing
+            return {'error':u"Błąd, edycja zablokowana"}
 
-    ret = dict()
-    with redis.pipeline() as pipe:
-        try:
-            desks = json.loads(request.form.get('desks', ""))
-            if(len(desks) != 8):
-                raise ValueError
-            for ch_id, desk in enumerate(desks):
-                redis.set(Desk.KEY_STRING % (0, ch_id),
-                          json.dumps({'name': desk['name'],
-                                     'description': desk['desc']})
-                )
-            pipe.execute()
-            ret["status"] = "OK"
-        except ValueError, KeyError:
-            ret['error'] = u"Błędne dane w POST"
+        ret = dict()
+        with redis.pipeline() as pipe:
+            try:
+                desks = json.loads(request.form.get('desks', ""))
+                if(len(desks) != 8):
+                    raise ValueError
+                for ch_id, desk in enumerate(desks):
+                    pipe.set(Desk.KEY_STRING % (0, ch_id),
+                              json.dumps({'name': desk['name'],
+                                         'description': desk['desc']})
+                    )
+                pipe.execute()
+                ret["status"] = "OK"
+            except ValueError, KeyError:
+                ret['error'] = u"Błędne dane w POST"
 
-    return jsonify(ret)
+        return jsonify(ret)
 
 @app.route('/desks')
+@login_required
 @templated()
 def desks():
     import time
@@ -282,40 +462,50 @@ def desks():
     for card in Card.all():
         for desk in card.all_desks():
             desks.append(desk)
-    return dict(
-            title = u"Stanowiska",
-            section_title = u"Stanowiska",
-            desks = desks,
-            edit_ok = edit_ok,
-    )
+    ret = _default_response()
+    ret['title']= u"Stanowiska"
+    ret['section_title']= u"Stanowiska"
+    ret['user']=current_user
+    ret['desks']= desks
+    ret['edit_ok']= edit_ok
+    return ret
 
-@app.route('/desk/edit/<int:card_id>/<int:channel_id>', methods=['GET', 'POST'])
+@app.route('/desk/edit/<int:card_id>/<int:channel_id>', methods=('GET', 'POST'))
+@login_required
 @templated()
 def edit_desk(card_id, channel_id):
-    from models import Desk
+    with permissions['recorder'].require():
+        from models import Desk
 
-    edit_ok, lock_id = _can_edit()
-    if(edit_ok):
-        redis.expire("tmp:deskLockId", 120)
-    else:
-       #Somebody else is editing
-       return redirect(url_for('desks'))
+        edit_ok, lock_id = _can_edit()
+        if(edit_ok):
+            redis.expire("tmp:deskLockId", 120)
+        else:
+           #Somebody else is editing
+           return redirect(url_for('desks'))
 
-    desk = Desk.load(card_id, channel_id)
-    if not desk:
-        abort(404)
+        desk = Desk.load(card_id, channel_id)
+        if not desk:
+            abort(404)
 
-    if(request.form):
-       desk.name = request.form['name'] 
-       desk.description = request.form['description'] 
-       desk.save()
-       return redirect(url_for('desks'))
+        if(request.method == 'POST'):
+           desk.name = request.form['name'] 
+           desk.description = request.form['description'] 
+           desk.save()
+           return redirect(url_for('desks'))
 
-    return dict(
-       desk = desk
-    ) 
+        ret = _default_response()
+        ret['title']= u"Edytuj stanowisko"
+        ret['section_title']= u"Edytuj stanowisko"
+        ret['desk']= desk
+        ret['user']=current_user
+        return ret
 
 @app.route('/test')
+@login_required
 def test():
-    return render_template('overview.html', section_title = u"Przegląd możliwość templatki") 
-
+    ret = _default_response()
+    ret['section_title'] = u"Przegląd możliwość templatki"
+    return render_template(
+        'overview.html', **ret
+        ) 

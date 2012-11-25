@@ -1,0 +1,48 @@
+{% extends "layout.html" %}
+{% block main %}
+<article class="module width_full">
+{% if error: %}
+<h4 class="alert_error">{{ error }}</h4>
+{% endif %}
+<header><h3>Dodaj użytkownika</h3></header>
+     <form action="{{ url_for('user_add') }}" method="POST">
+     {{ form.csrf_token }}
+     <div class="module_content">
+        <fieldset>
+            <label>Email:</label>
+            {{ form.email(title="Email", size=30, maxlength=2048) }}
+            <div class="clear"></div>
+            {% for error in form.email.errors: %}
+            <div class="field-error">{{ error }}</div>
+            {% endfor %}
+        </fieldset>
+        <fieldset>
+            <label>Hasło:</label>
+            {{ form.password(title="Hasło", size=30, maxlength=2048) }}
+            <div class="clear"></div>
+            {% for error in form.password.errors: %}
+            <div class="field-error">{{ error }}</div>
+            {% endfor %}
+        </fieldset>
+        <fieldset>
+            <label>Powtórz hasło:</label>
+            {{ form.re_password(title="Hasło", size=30, maxlength=2048) }}
+            <div class="clear"></div>
+            {% for error in form.re_password.errors: %}
+            <div class="field-error">{{ error }}</div>
+            {% endfor %}
+        </fieldset>
+        <fieldset>
+            <label>Uprawnienia:</label>
+            {{ form.roles }}
+            </select>
+        </fieldset>
+     </div>
+     <footer>
+      <div class="submit_link">
+      <input type="submit" value="Dodaj" class="alt_btn" name='submit'/>
+      </div>
+       </footer>
+    </form>
+</article>
+{% endblock %}

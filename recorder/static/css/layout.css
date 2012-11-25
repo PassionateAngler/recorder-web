@@ -709,7 +709,10 @@ margin: -5px 0 5px 0;
 text-transform: uppercase;
 }
 
-fieldset input[type=text] {
+fieldset input[type=text], 
+fieldset input[type=password],
+fieldset input[type=email]
+{
 -webkit-border-radius: 5px;
 -moz-border-radius: 5px;
 border-radius: 5px;
@@ -963,3 +966,12 @@ table .col_2{ width:20%}
   font-weight:bold;
 }
 
+#roles{
+  width:auto;
+  height:auto;
+}
+
+.field-error{
+  color:#E00000;
+  margin-left:10px;
+}

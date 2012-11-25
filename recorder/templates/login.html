@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Recorder | Login</title>
+<link href="{{ url_for('static', filename='css/login-box.css') }}" rel="stylesheet" type="text/css" />
+</head>
+<body>
+<div id="login-box">
+<h2>Zaloguj</h2>
+<div class="message">
+{% if message: %}
+{{ message }}
+{% endif %}
+</div>
+<br />
+<br />
+<form action="{{ url_for('login') }}" method='post'>
+    <div id="login-box-name" style="margin-top:20px;">Email:</div>
+    <div id="login-box-field" style="margin-top:20px;">
+        {{ form.csrf_token }}
+        {{ form.email(class_="form-login", title="Email", size=30, maxlength=2048) }}
+    </div>
+    <div id="login-box-name">Hasło:</div>
+    <div id="login-box-field">
+        {{ form.password(class_="form-login", title="Hasło", size=30, maxlength=2048) }}
+    </div>
+<br />
+<br />
+<input type='image' src="{{ url_for('static', filename='images/login-btn.png') }}" width="103" height="42" style="margin-left:90px;" />
+</form>
+</body>
+</html>

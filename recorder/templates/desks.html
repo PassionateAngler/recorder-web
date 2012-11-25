@@ -36,7 +36,7 @@
             <td class="c_1">{{desk.name}}</td>
             <td class="c_2">{{desk.description}}</td>
             <td class="c_3">
-                {% if edit_ok: %}
+                {% if edit_ok and permissions.recorder.can() :%}
                 <a href="{{ url_for('edit_desk', card_id=desk.card_id, channel_id=desk.channel_id) }}">Edytuj</a>
                 {% else: %}
                 &nbsp;
@@ -50,7 +50,7 @@
 </table>
 <div style="width:100%;clear:both;"></div>
 </article>
-{% if edit_ok: %}
+{% if edit_ok and permissions.recorder.can(): %}
 <script type="text/javascript">
     jQuery(function(){
         var fixHelper = function(e, ui) {

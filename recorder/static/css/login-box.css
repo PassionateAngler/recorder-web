@@ -1,12 +1,16 @@
+body{
+  padding:100px 0 0 0;
+  background:url(../images/tel_bg.png);
+}
 
 #login-box {
         margin:auto;
 	width:333px;
 	height: 352px;
-	padding: 58px 76px 0 76px;
-	color: #ebebeb;
+	padding: 38px 76px 0 30px;
+	color: #000;
 	font: 12px Arial, Helvetica, sans-serif;
-	background: url(../images/login-box-backg.png) no-repeat left top;
+	background: url(../images/tel_big_bg.png) no-repeat left top;
 }
 
 #login-box img {
@@ -16,7 +20,7 @@
 #login-box h2 {
 	padding:0;
 	margin:0;
-	color: #ebebeb;
+	color: #000;
 	font: bold 44px "Calibri", Arial;
 }
 
@@ -42,10 +46,10 @@
 .form-login  {
 	width: 205px;
 	padding: 10px 4px 6px 3px;
-	border: 1px solid #0d2c52;
-	background-color:#1e4f8a;
+	border: 1px solid #000;
+	background-color:#3c3c3c;
 	font-size: 16px;
-	color: #ebebeb;
+	color: #fff;
 }
 
 

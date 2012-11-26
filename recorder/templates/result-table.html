@@ -2,7 +2,6 @@
     <thead> 
     	<tr> 
     	<th>Opis biórka (w chwili nagrania)</th> 
-    	<th>Wyświetlacz</th> 
     	<th>Kanał</th> 
     	<th>Czas trwania</th> 
     	<th>Data rozpoczęcia</th> 
@@ -14,7 +13,6 @@
         {% for recording in recordings %}
         <tr>
             <td class="col_1">{{recording.desk['name']}}<br />{{recording.desk['description']}}</td>
-            <td class="col_2">{{recording.display}}</td>
             <td>{{recording.channel_id}}</td>
             <td>{{recording.duration}}</td>
             <td>{{recording.hr_timestamp()}}</td>

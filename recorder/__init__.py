@@ -390,7 +390,7 @@ def listen(rid):
         ret = _default_response()
         ret['title']=u"Odsłuchaj",
         ret['section_title']=u"Odsłuchaj",
-        ret['recording ']= recording 
+        ret['recording']= recording 
         return ret
    else:
        abort(404)

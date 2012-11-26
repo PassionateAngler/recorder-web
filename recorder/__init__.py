@@ -388,8 +388,8 @@ def listen(rid):
    recording = Recording.load(rid)
    if recording != None:
         ret = _default_response()
-        ret['title']=u"Odsłuchaj",
-        ret['section_title']=u"Odsłuchaj",
+        ret['title']=u"Odsłuchaj"
+        ret['section_title']=u"Odsłuchaj"
         ret['recording']= recording 
         return ret
    else:
